@@ -400,14 +400,14 @@ Workboxを使用しているため、キャッシュバージョンは自動管�
 
 実行IDは以下の形式で生成されます：
 ```
-BM-YYYYMMDD-NNN
+SMP-YYYYMMDD-NNN
 ```
 
-- `BM`: 固定プレフィックス（サンプルテスト）
+- `SMP`: 固定プレフィックス（サンプルテスト）
 - `YYYYMMDD`: 実行日（例: 20251015）
 - `NNN`: 当日の連番（001, 002, ...）
 
-**例**: `BM-20251015-001`, `BM-20251015-002`
+**例**: `SMP-20251015-001`, `SMP-20251015-002`
 
 実行IDはIndexedDBの`meta`ストアで管理され、日付ごとに独立したカウンターを持ちます。
 
@@ -423,7 +423,7 @@ BM-YYYYMMDD-NNN
 
 // executions: チェック実行履歴
 {
-  id: "BM-20251015-001",           // 実行ID
+  id: "SMP-20251015-001",           // 実行ID
   timestamp: 1697364000000,         // 実行日時
   date: "20251015",                // 実行日
   operatorName: "山田 太郎",        // 作業者名
@@ -434,7 +434,7 @@ BM-YYYYMMDD-NNN
 
 // blobs: 署名画像データ
 {
-  id: "BM-20251015-001_operator_signature",
+  id: "SMP-20251015-001_operator_signature",
   dataUrl: "data:image/png;base64,..."
 }
 
