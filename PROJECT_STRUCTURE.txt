@@ -1,0 +1,209 @@
+WorkCheckPWAOffline/
+│
+├─ 📄 ドキュメント
+│  ├─ README.md                    # メインドキュメント
+│  ├─ FILE_GUIDE.md               # このファイル説明書
+│  ├─ MOBILE_GUIDE.md             # モバイル利用ガイド
+│  ├─ QUICK_START_MOBILE.md       # クイックスタート
+│  └─ PROJECT_STRUCTURE.txt       # この構成図
+│
+├─ 🔧 設定ファイル
+│  ├─ package.json                # プロジェクト設定
+│  ├─ package-lock.json           # 依存ロック（自動生成）
+│  ├─ vite.config.js              # ビルド設定
+│  └─ .gitignore                  # Git除外設定
+│
+├─ 🚀 デプロイスクリプト
+│  ├─ deploy-to-iis.ps1           # IIS自動デプロイ（Windows）
+│  ├─ deploy-to-apache.sh         # Apache自動デプロイ（Linux）
+│  └─ setup-https-iis.ps1         # HTTPS設定（Windows）
+│
+├─ 🌐 サーバー設定
+│  ├─ web.config                  # IIS設定
+│  └─ .htaccess                   # Apache設定
+│
+├─ 📁 public/                     ★静的ファイル（そのままコピー）
+│  ├─ manifest.webmanifest        # PWA設定
+│  ├─ sw.js                       # Service Worker（オフライン対応の核心）
+│  └─ icons/
+│     └─ icon.svg                 # アプリアイコン
+│
+├─ 📁 src/                        ★ソースコード
+│  ├─ index.html                  # HTMLエントリー
+│  ├─ main.js                     # JSエントリー（SW登録含む）
+│  ├─ App.vue                     # ルートコンポーネント
+│  ├─ router.js                   # ルーティング設定
+│  ├─ styles.css                  # グローバルスタイル
+│  │
+│  ├─ views/                      ★画面コンポーネント
+│  │  ├─ Home.vue                 # チェック画面（メイン）
+│  │  ├─ History.vue              # 履歴画面
+│  │  ├─ Settings.vue             # 設定画面
+│  │  └─ PrintSheet.vue           # 印刷プレビュー
+│  │
+│  ├─ components/                 ★再利用コンポーネント
+│  │  ├─ ChecklistForm.vue        # チェックリスト入力
+│  │  └─ SignatureModal.vue       # 署名モーダル
+│  │
+│  ├─ stores/                     ★データ管理
+│  │  └─ db.js                    # IndexedDB操作
+│  │
+│  ├─ composables/                ★ロジック関数
+│  │  └─ useRunId.js              # 実行ID生成
+│  │
+│  └─ assets/                     ★リソース
+│     ├─ logo.svg                 # B&MTSロゴ
+│     └─ checklist.template.json  # チェック項目テンプレート
+│
+├─ 📁 node_modules/               ★依存パッケージ（自動生成・Git除外）
+│  ├─ vue/
+│  ├─ vue-router/
+│  ├─ idb/
+│  └─ ...（多数）
+│
+└─ 📁 dist/                       ★ビルド結果（自動生成・Git除外）
+   ├─ index.html
+   ├─ manifest.webmanifest
+   ├─ sw.js
+   ├─ web.config                  # 自動コピー
+   ├─ .htaccess                   # 自動コピー
+   ├─ icons/
+   │  └─ icon.svg
+   └─ assets/
+      ├─ index-[hash].js          # 最適化されたJS
+      └─ index-[hash].css         # 最適化されたCSS
+
+
+═══════════════════════════════════════════════════════════════════
+
+📊 ファイル役割マトリックス
+
+┌──────────────────────┬────────┬────────┬────────┬────────┐
+│ ファイル             │ 開発時 │ ビルド │ 実行時 │ 編集頻度│
+├──────────────────────┼────────┼────────┼────────┼────────┤
+│ src/*.vue            │   ✅   │   ✅   │   ❌   │   中   │
+│ src/main.js          │   ✅   │   ✅   │   ❌   │   低   │
+│ src/stores/db.js     │   ✅   │   ✅   │   ❌   │   低   │
+│ src/styles.css       │   ✅   │   ✅   │   ❌   │   中   │
+│ public/sw.js         │   ❌   │ コピー │   ✅   │   低   │
+│ public/manifest      │   ❌   │ コピー │   ✅   │   低   │
+│ vite.config.js       │   ✅   │   ✅   │   ❌   │   低   │
+│ web.config           │   ❌   │ コピー │   ✅   │   低   │
+│ .htaccess            │   ❌   │ コピー │   ✅   │   低   │
+│ deploy-*.ps1/sh      │   ❌   │   ❌   │   ❌   │   低   │
+│ checklist.json       │   ✅   │ コピー │   ✅   │   高   │
+│ assets/logo.svg      │   ✅   │ コピー │   ✅   │   低   │
+└──────────────────────┴────────┴────────┴────────┴────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+
+🔄 データフロー図
+
+┌─────────────┐
+│  ユーザー    │
+└──────┬──────┘
+       │
+       ↓
+┌──────────────────────────────────────────┐
+│  ブラウザ                                 │
+│                                          │
+│  ┌────────────────────────────────────┐  │
+│  │ index.html + main.js               │  │
+│  │   ├─ App.vue                       │  │
+│  │   │   └─ router-view               │  │
+│  │   │       ├─ Home.vue              │  │
+│  │   │       │   ├─ ChecklistForm     │  │
+│  │   │       │   └─ SignatureModal    │  │
+│  │   │       ├─ History.vue           │  │
+│  │   │       └─ PrintSheet.vue        │  │
+│  │   └─ stores/db.js                  │  │
+│  └────────┬───────────────────────┬────┘  │
+│           │                       │       │
+│           ↓                       ↓       │
+│  ┌────────────────┐      ┌──────────────┐│
+│  │  IndexedDB     │      │ Service      ││
+│  │  ・executions  │      │ Worker       ││
+│  │  ・blobs       │      │  (sw.js)     ││
+│  │  ・meta        │      │  ・キャッシュ││
+│  └────────────────┘      └──────────────┘│
+└──────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+
+🎯 開発フロー
+
+1. コード編集
+   ├─ src/*.vue          # 画面・コンポーネント
+   ├─ src/styles.css     # スタイル
+   └─ src/assets/*.json  # データ
+
+2. 開発サーバー起動
+   $ npm run dev
+   ├─ http://localhost:5173/ で確認
+   └─ ホットリロード（自動更新）
+
+3. ビルド
+   $ npm run build
+   ├─ dist/ フォルダに出力
+   ├─ JS/CSS最適化・圧縮
+   └─ sw.js, web.config等をコピー
+
+4. デプロイ
+   $ .\deploy-to-iis.ps1
+   または
+   $ ./deploy-to-apache.sh
+   ├─ 自動ビルド
+   ├─ ファイルコピー
+   └─ サーバー設定
+
+5. HTTPS設定（モバイル用）
+   $ .\setup-https-iis.ps1
+   ├─ 証明書作成
+   └─ HTTPSバインディング
+
+6. モバイルアクセス
+   iPhone/iPad Safari
+   ├─ https://192.168.1.XXX/
+   ├─ ホーム画面に追加
+   └─ オフライン動作！
+
+
+═══════════════════════════════════════════════════════════════════
+
+🔑 重要ファイルトップ10
+
+1. 🌟 public/sw.js
+   → オフライン対応の核心。キャッシュ戦略を定義
+
+2. 🌟 src/main.js
+   → アプリ起動・Service Worker登録
+
+3. 🌟 src/App.vue
+   → ルートコンポーネント・オンライン状態管理
+
+4. 🌟 src/stores/db.js
+   → データ永続化・IndexedDB操作
+
+5. 🌟 src/views/Home.vue
+   → メイン画面・チェック入力
+
+6. 🌟 src/views/PrintSheet.vue
+   → 印刷・PDF生成
+
+7. 🌟 src/assets/checklist.template.json
+   → チェック項目定義（カスタマイズ可）
+
+8. 🌟 src/styles.css
+   → グローバルスタイル・印刷CSS
+
+9. 🌟 deploy-to-iis.ps1
+   → 自動デプロイスクリプト
+
+10. 🌟 setup-https-iis.ps1
+    → HTTPS自動設定（モバイル必須）
+
+
+═══════════════════════════════════════════════════════════════════
+

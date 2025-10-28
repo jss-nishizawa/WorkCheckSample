@@ -1,0 +1,46 @@
+{
+  "templateName": "標準作業確認チェックリスト",
+  "version": "1.0",
+  "items": [
+    {
+      "id": "item1",
+      "label": "作業前の安全確認を実施しましたか",
+      "hasRemark": true,
+      "remarkMaxLength": 50
+    },
+    {
+      "id": "item2",
+      "label": "必要な工具・機材を準備しましたか",
+      "hasRemark": true,
+      "remarkMaxLength": 50
+    },
+    {
+      "id": "item3",
+      "label": "作業手順を確認しましたか",
+      "hasRemark": false
+    },
+    {
+      "id": "item4",
+      "label": "作業環境（照明・換気等）は適切ですか",
+      "hasRemark": true,
+      "remarkMaxLength": 50
+    },
+    {
+      "id": "item5",
+      "label": "作業完了後の確認を実施しましたか",
+      "hasRemark": true,
+      "remarkMaxLength": 50
+    },
+    {
+      "id": "item6",
+      "label": "使用した工具・機材を片付けましたか",
+      "hasRemark": false
+    },
+    {
+      "id": "item7",
+      "label": "作業記録を適切に記入しましたか",
+      "hasRemark": false
+    }
+  ]
+}
+
