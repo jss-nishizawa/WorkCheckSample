@@ -214,7 +214,16 @@ const handlePrint = async () => {
 }
 
 onMounted(() => {
-  // 初期化処理（必要に応じて）
+  // チェックリストの初期化
+  const initialChecklist = {}
+  checklistItems.value.forEach(item => {
+    initialChecklist[item.id] = {
+      checked: false,
+      remark: item.hasRemark ? '' : undefined
+    }
+  })
+  formData.value.checklist = initialChecklist
+  console.log('チェックリスト初期化完了:', initialChecklist)
 })
 </script>
 

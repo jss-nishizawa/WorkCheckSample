@@ -51,6 +51,11 @@ const remarks = ref({})
 
 // 初期化
 const initializeStates = () => {
+  if (!props.items || props.items.length === 0) {
+    console.log('ChecklistForm: アイテムが空です')
+    return
+  }
+  
   const newCheckStates = {}
   const newRemarks = {}
   
@@ -89,8 +94,8 @@ const emitUpdate = () => {
 initializeStates()
 
 // プロパティ変更時に再初期化
-watch(() => props.items, initializeStates, { deep: true })
-watch(() => props.modelValue, initializeStates, { deep: true })
+watch(() => props.items, initializeStates, { deep: true, immediate: true })
+watch(() => props.modelValue, initializeStates, { deep: true, immediate: true })
 </script>
 
 <style scoped>
