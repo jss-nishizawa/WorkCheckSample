@@ -5,7 +5,7 @@ import { copyFileSync } from 'node:fs'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: '/WorkCheckSample/',
+  base: process.env.NODE_ENV === 'production' ? '/WorkCheckSample/' : '/',
   plugins: [
     vue(),
     VitePWA({
@@ -14,7 +14,7 @@ export default defineConfig({
       manifest: false, // 既存のmanifest.webmanifestを使用
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,jpg,jpeg,gif,webp,webmanifest}'],
-        navigateFallback: '/index.html',
+        navigateFallback: process.env.NODE_ENV === 'production' ? '/WorkCheckSample/index.html' : '/index.html',
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
           {
