@@ -32,7 +32,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes,
   // スクロール動作を制御する関数を追加
   scrollBehavior(to, from, savedPosition) {
