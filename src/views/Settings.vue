@@ -3,43 +3,6 @@
     <h2 class="page-title">設定</h2>
     
     <div class="card">
-      <h3 class="card-title">ネットワーク状態</h3>
-      
-      <div class="network-status-container">
-        <div v-if="isServerOnline" class="status-card online">
-          <div class="status-icon-large">🟢</div>
-          <div class="status-info">
-            <div class="status-title">オンライン</div>
-            <div class="status-description">サーバーに接続されています</div>
-            <div class="status-detail">{{ serverUrl }}</div>
-          </div>
-        </div>
-        
-        <div v-else class="status-card offline">
-          <div class="status-icon-large">🔴</div>
-          <div class="status-info">
-            <div class="status-title">オフライン</div>
-            <div class="status-description">
-              <span v-if="!networkOnline">ネットワーク接続がありません</span>
-              <span v-else>サーバーに接続できません</span>
-            </div>
-            <div class="status-detail">{{ serverUrl }}</div>
-          </div>
-        </div>
-        
-        <div class="check-info">
-          <div class="check-row">
-            <span class="check-label">最終確認:</span>
-            <span class="check-value">{{ lastCheckTime }}</span>
-          </div>
-          <button class="btn btn-secondary btn-sm" @click="checkNow" :disabled="checking">
-            {{ checking ? '確認中...' : '今すぐ確認' }}
-          </button>
-        </div>
-      </div>
-    </div>
-    
-    <div class="card">
       <h3 class="card-title">アプリ情報</h3>
       
       <div class="info-section">
@@ -54,6 +17,65 @@
         <div class="info-row">
           <span class="info-label">テンプレート:</span>
           <span class="info-value">{{ templateName }}</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h3 class="card-title">会社情報・ロゴ管理</h3>
+      
+      <p class="setting-description">
+        メールの添付ファイルから会社情報やロゴを読み込むことができます。
+      </p>
+      
+      <div class="setting-actions">
+        <div class="action-group">
+          <h4 class="action-title">会社情報</h4>
+          <div class="action-buttons">
+            <button class="btn btn-primary" @click="handleImportCompanyConfig">
+              📥 会社情報をインポート
+            </button>
+            <button class="btn btn-secondary" @click="handleExportCompanyConfig">
+              📤 会社情報をエクスポート
+            </button>
+          </div>
+          <p class="action-hint">
+            JSONファイル（例: company-config.json）を選択してインポート
+          </p>
+          <details class="config-format">
+            <summary>ファイル形式の例</summary>
+            <pre class="config-example">{
+  "companyName": "株式会社 サンプル",
+  "companyShortName": "SAMPLE",
+  "runIdPrefix": "SMP"
+}</pre>
+            <p class="config-note">
+              <strong>companyName</strong>: 会社名（フッターや印刷時に表示）<br>
+              <strong>companyShortName</strong>: 会社名（短縮名、設定画面のアプリ情報に表示）<br>
+              <strong>runIdPrefix</strong>: 実行IDのプレフィックス（例: SMP → SMP-STANDARD-20251029-001）
+            </p>
+          </details>
+        </div>
+        
+        <div class="action-group">
+          <h4 class="action-title">会社ロゴ</h4>
+          <div class="action-buttons">
+            <button class="btn btn-primary" @click="handleImportLogo">
+              📥 ロゴをインポート
+            </button>
+            <button v-if="hasLogo" class="btn btn-secondary" @click="handlePreviewLogo">
+              👁️ ロゴをプレビュー
+            </button>
+            <button v-if="hasLogo" class="btn btn-danger" @click="handleDeleteLogo">
+              🗑️ ロゴを削除
+            </button>
+          </div>
+          <p class="action-hint">
+            画像ファイル（PNG、JPG、SVG）を選択してインポート
+          </p>
+          <div v-if="hasLogo" class="logo-preview">
+            <img :src="logoPreview" alt="会社ロゴ" class="logo-preview-image" />
+          </div>
         </div>
       </div>
     </div>
@@ -97,112 +119,227 @@
         </ol>
       </div>
     </div>
-    
-    <div class="card">
-      <h3 class="card-title">今後の機能拡張予定</h3>
-      
-      <ul class="feature-list">
-        <li>ロゴ画像の変更機能</li>
-        <li>チェックリストテンプレートのカスタマイズ</li>
-        <li>写真添付機能（Android/Chrome優先）</li>
-        <li>データのエクスポート/インポート</li>
-      </ul>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import checklistTemplate from '@/assets/checklist.template.json'
-import { initDB } from '@/stores/db'
+import { initDB, saveCompanyConfig, getCompanyConfig, saveCompanyLogo, getCompanyLogo, getActiveTemplateId, getTemplate } from '@/stores/db'
 import { COMPANY_SHORT_NAME } from '@/config/constants'
 
 const templateName = ref(checklistTemplate.templateName)
-const companyShortName = COMPANY_SHORT_NAME
+const companyShortName = ref(COMPANY_SHORT_NAME)
 
-// ネットワーク状態
-const networkOnline = ref(navigator.onLine)
-const isServerOnline = ref(false)
-const serverUrl = ref(location.origin)
-const lastCheckTime = ref('確認中...')
-const checking = ref(false)
+// ロゴ管理
+const hasLogo = ref(false)
+const logoPreview = ref(null)
 
-// サーバー接続確認
-const checkServerConnection = async () => {
-  checking.value = true
-  
+// 会社情報の読み込み
+const loadCompanyInfo = async () => {
   try {
-    // 配信元サーバーに接続確認
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5秒タイムアウト
-    
-    const response = await fetch(`${location.origin}/manifest.webmanifest`, {
-      method: 'HEAD',
-      cache: 'no-cache',
-      signal: controller.signal,
-      headers: {
-        'X-Server-Check': Date.now().toString() // キャッシュ回避
-      }
-    })
-    
-    clearTimeout(timeoutId)
-    
-    if (response.ok) {
-      isServerOnline.value = true
-      console.log('[Settings] Server connection: OK')
+    const config = await getCompanyConfig()
+    if (config && config.companyShortName) {
+      companyShortName.value = config.companyShortName
     } else {
-      isServerOnline.value = false
-      console.log('[Settings] Server connection: Failed (status:', response.status, ')')
+      // 会社情報がない場合はデフォルト値を使用
+      companyShortName.value = COMPANY_SHORT_NAME
     }
   } catch (error) {
-    isServerOnline.value = false
-    console.log('[Settings] Server connection: Failed (', error.message, ')')
-  } finally {
-    checking.value = false
-    const now = new Date()
-    lastCheckTime.value = now.toLocaleTimeString('ja-JP', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
+    console.error('会社情報読み込みエラー:', error)
+    // エラー時はデフォルト値を使用
+    companyShortName.value = COMPANY_SHORT_NAME
   }
 }
 
-// 手動確認
-const checkNow = () => {
-  checkServerConnection()
-}
-
-// ネットワーク状態の監視
-const updateNetworkStatus = () => {
-  networkOnline.value = navigator.onLine
-  if (!navigator.onLine) {
-    isServerOnline.value = false
-  } else {
-    checkServerConnection()
+// アクティブなテンプレート名の読み込み
+const loadTemplateName = async () => {
+  try {
+    const activeTemplateId = await getActiveTemplateId()
+    if (activeTemplateId) {
+      const template = await getTemplate(activeTemplateId)
+      if (template && template.name) {
+        templateName.value = template.name
+        return
+      }
+    }
+    // アクティブテンプレートがない場合はデフォルトテンプレート名を使用
+    templateName.value = checklistTemplate.templateName
+  } catch (error) {
+    console.error('テンプレート名読み込みエラー:', error)
+    // エラー時はデフォルトテンプレート名を使用
+    templateName.value = checklistTemplate.templateName
   }
 }
 
-let intervalId = null
+// ロゴの読み込み
+const loadLogo = async () => {
+  try {
+    const logo = await getCompanyLogo()
+    if (logo) {
+      hasLogo.value = true
+      logoPreview.value = logo
+    } else {
+      hasLogo.value = false
+      logoPreview.value = null
+    }
+  } catch (error) {
+    console.error('ロゴ読み込みエラー:', error)
+    hasLogo.value = false
+    logoPreview.value = null
+  }
+}
 
-onMounted(() => {
-  // 初回確認
-  checkServerConnection()
+// 会社情報をインポート
+const handleImportCompanyConfig = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+  input.onchange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    try {
+      const text = await file.text()
+      const config = JSON.parse(text)
+      
+      // バリデーション
+      if (!config.companyName && !config.runIdPrefix) {
+        throw new Error('会社情報の形式が不正です。companyNameまたはrunIdPrefixが必要です。')
+      }
+      
+      await saveCompanyConfig(config)
+      // 会社情報を再読み込み
+      await loadCompanyInfo()
+      alert('会社情報をインポートしました。')
+      
+      // ページをリロード（設定を反映するため）
+      if (confirm('設定を反映するためにページをリロードしますか？')) {
+        window.location.reload()
+      }
+    } catch (error) {
+      console.error('会社情報インポートエラー:', error)
+      alert('会社情報のインポートに失敗しました: ' + error.message)
+    }
+  }
+  input.click()
+}
+
+// 会社情報をエクスポート
+const handleExportCompanyConfig = async () => {
+  try {
+    const config = await getCompanyConfig()
+    
+    if (!config) {
+      alert('会社情報が設定されていません。')
+      return
+    }
+    
+    const json = JSON.stringify(config, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const date = new Date().toISOString().split('T')[0].replace(/-/g, '')
+    a.href = url
+    a.download = `company-config-${date}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    
+    alert('会社情報をエクスポートしました')
+  } catch (error) {
+    console.error('会社情報エクスポートエラー:', error)
+    alert('会社情報のエクスポートに失敗しました: ' + error.message)
+  }
+}
+
+// ロゴをインポート
+const handleImportLogo = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/*'
+  input.onchange = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    
+    try {
+      // ファイルをBase64に変換
+      const reader = new FileReader()
+      reader.onload = async (event) => {
+        try {
+          const dataUrl = event.target.result
+          await saveCompanyLogo(dataUrl)
+          await loadLogo()
+          alert('ロゴをインポートしました。\nページをリロードして反映されます。')
+          
+          // ページをリロード（ロゴを反映するため）
+          if (confirm('ロゴを反映するためにページをリロードしますか？')) {
+            window.location.reload()
+          }
+        } catch (error) {
+          console.error('ロゴ保存エラー:', error)
+          alert('ロゴの保存に失敗しました: ' + error.message)
+        }
+      }
+      reader.onerror = () => {
+        alert('ファイルの読み込みに失敗しました')
+      }
+      reader.readAsDataURL(file)
+    } catch (error) {
+      console.error('ロゴインポートエラー:', error)
+      alert('ロゴのインポートに失敗しました: ' + error.message)
+    }
+  }
+  input.click()
+}
+
+// ロゴをプレビュー
+const handlePreviewLogo = () => {
+  if (logoPreview.value) {
+    const newWindow = window.open()
+    if (newWindow) {
+      newWindow.document.write(`
+        <html>
+          <head><title>ロゴプレビュー</title></head>
+          <body style="margin:0; padding:20px; text-align:center; background:#f5f5f5;">
+            <h2>会社ロゴ</h2>
+            <img src="${logoPreview.value}" alt="会社ロゴ" style="max-width:100%; height:auto; border:1px solid #ddd; padding:10px; background:white;" />
+          </body>
+        </html>
+      `)
+    }
+  }
+}
+
+// ロゴを削除
+const handleDeleteLogo = async () => {
+  if (!confirm('ロゴを削除しますか？')) {
+    return
+  }
   
-  // 30秒ごとに自動確認
-  intervalId = setInterval(checkServerConnection, 30000)
-  
-  // ネットワーク状態の変化を監視
-  window.addEventListener('online', updateNetworkStatus)
-  window.addEventListener('offline', updateNetworkStatus)
-})
-
-onUnmounted(() => {
-  if (intervalId) {
-    clearInterval(intervalId)
+  try {
+    // ロゴを削除（空の文字列を保存して削除）
+    await saveCompanyLogo('')
+    await loadLogo()
+    alert('ロゴを削除しました。\nページをリロードして反映されます。')
+    
+    if (confirm('ページをリロードしますか？')) {
+      window.location.reload()
+    }
+  } catch (error) {
+    console.error('ロゴ削除エラー:', error)
+    alert('ロゴの削除に失敗しました: ' + error.message)
   }
-  window.removeEventListener('online', updateNetworkStatus)
-  window.removeEventListener('offline', updateNetworkStatus)
+}
+
+onMounted(async () => {
+  // 会社情報を読み込む
+  await loadCompanyInfo()
+  
+  // アクティブなテンプレート名を読み込む
+  await loadTemplateName()
+  
+  // ロゴを読み込む
+  await loadLogo()
 })
 
 // すべてのデータを削除
@@ -250,107 +387,6 @@ const handleClearData = async () => {
   font-size: 1.75rem;
   font-weight: 600;
   margin-bottom: 1.5rem;
-  color: #1f2937;
-}
-
-/* ネットワーク状態表示 */
-.network-status-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.status-card {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  border-radius: 0.75rem;
-  transition: all 0.3s;
-}
-
-.status-card.online {
-  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
-  border: 2px solid #10b981;
-}
-
-.status-card.offline {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  border: 2px solid #ef4444;
-}
-
-.status-icon-large {
-  font-size: 3rem;
-  line-height: 1;
-}
-
-.status-info {
-  flex: 1;
-}
-
-.status-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-}
-
-.status-card.online .status-title {
-  color: #065f46;
-}
-
-.status-card.offline .status-title {
-  color: #991b1b;
-}
-
-.status-description {
-  font-size: 1rem;
-  margin-bottom: 0.5rem;
-}
-
-.status-card.online .status-description {
-  color: #047857;
-}
-
-.status-card.offline .status-description {
-  color: #dc2626;
-}
-
-.status-detail {
-  font-size: 0.875rem;
-  font-family: monospace;
-}
-
-.status-card.online .status-detail {
-  color: #059669;
-}
-
-.status-card.offline .status-detail {
-  color: #b91c1c;
-}
-
-.check-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 0.5rem;
-}
-
-.check-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.check-label {
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
-.check-value {
-  font-size: 0.875rem;
-  font-weight: 500;
   color: #1f2937;
 }
 
@@ -403,14 +439,92 @@ const handleClearData = async () => {
   margin-bottom: 0.25rem;
 }
 
-.feature-list {
-  margin: 0 0 0 1.5rem;
-  padding: 0;
-  color: #4b5563;
+/* 会社情報・ロゴ管理 */
+.action-group {
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.feature-list li {
+.action-group:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.action-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 1rem 0;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   margin-bottom: 0.5rem;
+}
+
+.action-hint {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0.5rem 0 0 0;
+}
+
+.logo-preview {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.logo-preview-image {
+  max-width: 200px;
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.config-format {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+}
+
+.config-format summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #2563eb;
+  user-select: none;
+}
+
+.config-format summary:hover {
+  color: #1e40af;
+}
+
+.config-example {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #1f2937;
+  color: #f9fafb;
+  border-radius: 0.25rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  overflow-x: auto;
+}
+
+.config-note {
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0.5rem 0 0 0;
 }
 
 @media (max-width: 640px) {
