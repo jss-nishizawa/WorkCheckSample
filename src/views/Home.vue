@@ -7,6 +7,39 @@
       <h3 class="card-title">基本情報</h3>
       
       <div class="form-group">
+        <label for="workLocation" class="form-label required">作業場所</label>
+        <input
+          id="workLocation"
+          type="text"
+          class="form-input"
+          v-model="formData.workLocation"
+          placeholder="例: 東京本社"
+        />
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="workStartDate" class="form-label required">作業開始日</label>
+          <input
+            id="workStartDate"
+            type="date"
+            class="form-input"
+            v-model="formData.workStartDate"
+          />
+        </div>
+        <div class="form-group">
+          <label for="workEndDate" class="form-label required">作業終了日</label>
+          <input
+            id="workEndDate"
+            type="date"
+            class="form-input"
+            v-model="formData.workEndDate"
+            :min="formData.workStartDate"
+          />
+        </div>
+      </div>
+      
+      <div class="form-group">
         <label for="operatorName" class="form-label required">作業者名</label>
         <input
           id="operatorName"
@@ -97,13 +130,16 @@ import ChecklistForm from '@/components/ChecklistForm.vue'
 import SignatureModal from '@/components/SignatureModal.vue'
 import checklistTemplate from '@/assets/checklist.template.json'
 import { generateRunId } from '@/composables/useRunId'
-import { saveExecution, saveBlob } from '@/stores/db'
+import { saveExecution, saveBlob, getActiveTemplateId, getTemplate, getTemplates, saveTemplate, setActiveTemplateId } from '@/stores/db'
 
 const router = useRouter()
 
 const checklistItems = ref(checklistTemplate.items)
 
 const formData = ref({
+  workLocation: '',
+  workStartDate: '',
+  workEndDate: '',
   operatorName: '',
   checkerName: '',
   checklist: {},
@@ -122,6 +158,9 @@ const isSaving = ref(false)
 // フォームバリデーション
 const isFormValid = computed(() => {
   return (
+    formData.value.workLocation.trim() !== '' &&
+    formData.value.workStartDate !== '' &&
+    formData.value.workEndDate !== '' &&
     formData.value.operatorName.trim() !== '' &&
     formData.value.checkerName.trim() !== '' &&
     formData.value.operatorSignature !== null &&
@@ -159,9 +198,37 @@ const handlePrint = async () => {
     
     console.log('印刷処理開始...')
     
-    // 実行IDを生成
+    // アクティブなテンプレートを取得
+    let activeTemplate
+    const activeTemplateId = await getActiveTemplateId()
+    
+    if (activeTemplateId) {
+      try {
+        activeTemplate = await getTemplate(activeTemplateId)
+        console.log('アクティブテンプレート:', activeTemplate)
+      } catch (e) {
+        console.warn('アクティブテンプレートが見つかりません。デフォルトテンプレートを使用します。', e)
+      }
+    }
+    
+    // テンプレートが取得できなかった場合はデフォルトを使用
+    if (!activeTemplate) {
+      activeTemplate = {
+        id: 'default',
+        name: checklistTemplate.templateName,
+        templateId: 'STANDARD',
+        items: checklistTemplate.items
+      }
+    }
+    
+    // チェックリストアイテムを更新
+    checklistItems.value = activeTemplate.items
+    
+    // 実行IDを生成（テンプレートIDを渡す）
     console.log('実行ID生成中...')
-    const runId = await generateRunId()
+    // デフォルトテンプレートの場合はtemplateIdを直接使用、それ以外はUUID
+    const templateIdForRunId = activeTemplate.id === 'default' ? activeTemplate.templateId : activeTemplate.id
+    const runId = await generateRunId(templateIdForRunId)
     console.log('実行ID:', runId)
     
     const timestamp = new Date().toISOString()
@@ -172,7 +239,11 @@ const handlePrint = async () => {
       id: runId,
       timestamp,
       date,
-      templateName: checklistTemplate.templateName,
+      templateName: activeTemplate.name,
+      templateId: activeTemplate.templateId,
+      workLocation: formData.value.workLocation,
+      workStartDate: formData.value.workStartDate,
+      workEndDate: formData.value.workEndDate,
       operatorName: formData.value.operatorName,
       checkerName: formData.value.checkerName,
       checklist: JSON.parse(JSON.stringify(formData.value.checklist)) // ディープコピーでプレーンオブジェクト化
@@ -213,10 +284,19 @@ const handlePrint = async () => {
   }
 }
 
-onMounted(() => {
-  // チェックリストの初期化
+// チェックリストの初期化関数
+const initializeChecklist = () => {
+  if (!checklistItems.value || checklistItems.value.length === 0) {
+    console.warn('チェックリストアイテムが空です。初期化をスキップします。')
+    return
+  }
+  
   const initialChecklist = {}
   checklistItems.value.forEach(item => {
+    if (!item.id) {
+      console.warn('アイテムにIDがありません:', item)
+      return
+    }
     initialChecklist[item.id] = {
       checked: false,
       remark: item.hasRemark ? '' : undefined
@@ -224,6 +304,67 @@ onMounted(() => {
   })
   formData.value.checklist = initialChecklist
   console.log('チェックリスト初期化完了:', initialChecklist)
+  console.log('チェックリストアイテム数:', checklistItems.value.length)
+}
+
+onMounted(async () => {
+  // アクティブなテンプレートを読み込む
+  try {
+    const activeTemplateId = await getActiveTemplateId()
+    if (activeTemplateId) {
+      const template = await getTemplate(activeTemplateId)
+      if (template && template.items) {
+        checklistItems.value = template.items
+        console.log('アクティブテンプレートを読み込みました:', template.name)
+      } else {
+        // テンプレートが見つからない場合、デフォルトを使用
+        console.warn('テンプレートが見つかりません。デフォルトテンプレートを使用します。')
+        checklistItems.value = checklistTemplate.items
+      }
+    } else {
+      // 初回起動時: デフォルトテンプレートを登録してアクティブにする
+      const existingTemplates = await getTemplates()
+      
+      // STANDARDテンプレートが存在しない場合、デフォルトテンプレートを登録
+      const hasStandard = existingTemplates.some(t => t.templateId === 'STANDARD')
+      if (!hasStandard) {
+        const defaultTemplate = {
+          name: checklistTemplate.templateName,
+          templateId: 'STANDARD',
+          description: '標準の作業確認チェックリスト',
+          items: checklistTemplate.items.map((item, index) => ({
+            id: item.id || `item${index + 1}`,
+            label: item.label,
+            hasRemark: item.hasRemark || false,
+            remarkMaxLength: item.remarkMaxLength || 50
+          })),
+          isDefault: true
+        }
+        
+        const templateId = await saveTemplate(defaultTemplate)
+        await setActiveTemplateId(templateId)
+        checklistItems.value = defaultTemplate.items
+        console.log('デフォルトテンプレートを登録しました')
+      } else {
+        // STANDARDテンプレートが既に存在する場合、それを使用
+        const standardTemplate = existingTemplates.find(t => t.templateId === 'STANDARD')
+        if (standardTemplate && standardTemplate.items) {
+          checklistItems.value = standardTemplate.items
+          console.log('既存のSTANDARDテンプレートを使用します')
+        } else {
+          // フォールバック: デフォルトテンプレートを使用
+          checklistItems.value = checklistTemplate.items
+          console.log('デフォルトテンプレートを使用します')
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('テンプレートの読み込みに失敗しました。デフォルトテンプレートを使用します。', error)
+    checklistItems.value = checklistTemplate.items
+  }
+  
+  // テンプレート読み込み完了後にチェックリストを初期化
+  initializeChecklist()
 })
 </script>
 
@@ -238,6 +379,18 @@ onMounted(() => {
   font-weight: 600;
   margin-bottom: 1.5rem;
   color: #1f2937;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .signature-section {
