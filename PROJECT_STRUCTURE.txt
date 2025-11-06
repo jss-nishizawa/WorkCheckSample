@@ -52,7 +52,7 @@ WorkCheckPWAOffline/
 │  │  └─ useRunId.js              # 実行ID生成
 │  │
 │  └─ assets/                     ★リソース
-│     ├─ logo.svg                 # B&MTSロゴ
+│     ├─ logo.svg                 # ロゴ
 │     └─ checklist.template.json  # チェック項目テンプレート
 │
 ├─ 📁 node_modules/               ★依存パッケージ（自動生成・Git除外）
