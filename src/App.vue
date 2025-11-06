@@ -2,7 +2,18 @@
   <div id="app-container" class="app-container">
     <header v-if="!hideNav" class="app-header no-print">
       <div class="header-content">
-        <img src="@/assets/logo.svg" :alt="companyName" class="header-logo" />
+        <img 
+          v-if="logoUrl" 
+          :src="logoUrl" 
+          :alt="companyName" 
+          class="header-logo" 
+        />
+        <img 
+          v-else 
+          src="@/assets/logo.svg" 
+          :alt="companyName" 
+          class="header-logo" 
+        />
         <h1 class="header-title">作業確認アプリ</h1>
       </div>
     </header>
@@ -10,6 +21,7 @@
     <nav v-if="!hideNav" class="app-nav no-print">
       <router-link to="/" :class="{ active: $route.name === 'Home' }">チェック</router-link>
       <router-link to="/history" :class="{ active: $route.name === 'History' }">履歴</router-link>
+      <router-link to="/templates" :class="{ active: $route.name === 'TemplateManager' }">テンプレート</router-link>
       <router-link to="/settings" :class="{ active: $route.name === 'Settings' }">設定</router-link>
     </nav>
 
@@ -24,15 +36,46 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { COMPANY_NAME } from '@/config/constants'
+import { getCompanyConfig, getCompanyLogo } from '@/stores/db'
 
 const route = useRoute()
 const hideNav = computed(() => route.meta.hideNav || false)
 
-// 会社名を使用
-const companyName = COMPANY_NAME
+// 会社情報とロゴ
+const companyName = ref(COMPANY_NAME)
+const logoUrl = ref(null)
+
+// 会社情報とロゴを読み込む
+const loadCompanyInfo = async () => {
+  try {
+    // 会社情報を読み込む
+    const config = await getCompanyConfig()
+    if (config && config.companyName) {
+      companyName.value = config.companyName
+    }
+    
+    // ロゴを読み込む
+    const logo = await getCompanyLogo()
+    if (logo && logo.trim() !== '') {
+      logoUrl.value = logo
+    } else {
+      // デフォルトロゴを使用
+      logoUrl.value = null
+    }
+  } catch (error) {
+    console.error('会社情報読み込みエラー:', error)
+    // エラー時はデフォルト値を使用
+    companyName.value = COMPANY_NAME
+    logoUrl.value = null
+  }
+}
+
+onMounted(() => {
+  loadCompanyInfo()
+})
 </script>
 
 <style scoped>

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Home from './views/Home.vue'
 import History from './views/History.vue'
 import Settings from './views/Settings.vue'
+import TemplateManager from './views/TemplateManager.vue'
 import PrintSheet from './views/PrintSheet.vue'
 
 const routes = [
@@ -16,6 +17,12 @@ const routes = [
     name: 'History',
     component: History,
     meta: { title: '履歴' }
+  },
+  {
+    path: '/templates',
+    name: 'TemplateManager',
+    component: TemplateManager,
+    meta: { title: 'テンプレート管理' }
   },
   {
     path: '/settings',

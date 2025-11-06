@@ -25,6 +25,16 @@
         <div class="print-header">
           <div class="print-header-left">
             <img
+              v-if="logoUrl"
+              ref="logoRef"
+              :src="logoUrl"
+              :alt="companyName"
+              class="print-logo"
+              @load="onImageLoad"
+              @error="onImageError"
+            />
+            <img
+              v-else
               ref="logoRef"
               src="@/assets/logo.svg"
               :alt="companyName"
@@ -116,7 +126,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getExecution, getBlob } from '@/stores/db'
+import { getExecution, getBlob, getCompanyConfig, getCompanyLogo } from '@/stores/db'
 import checklistTemplate from '@/assets/checklist.template.json'
 import { COMPANY_NAME } from '@/config/constants'
 
@@ -130,8 +140,9 @@ const operatorSignature = ref(null)
 const checkerSignature = ref(null)
 const checklistItems = ref(checklistTemplate.items)
 
-// 会社名を取得
-const companyName = COMPANY_NAME
+// 会社情報とロゴ
+const companyName = ref(COMPANY_NAME)
+const logoUrl = ref(null)
 
 const logoRef = ref(null)
 const operatorSigRef = ref(null)
@@ -177,6 +188,22 @@ const loadData = async () => {
     // 署名画像を取得
     operatorSignature.value = await getBlob(`${id}_operator_signature`)
     checkerSignature.value = await getBlob(`${id}_checker_signature`)
+    
+    // 会社情報とロゴを読み込む
+    try {
+      const config = await getCompanyConfig()
+      if (config && config.companyName) {
+        companyName.value = config.companyName
+      }
+      
+      const logo = await getCompanyLogo()
+      if (logo && logo.trim() !== '') {
+        logoUrl.value = logo
+      }
+    } catch (error) {
+      console.warn('会社情報読み込みエラー:', error)
+      // エラー時はデフォルト値を使用
+    }
     
     // PDFファイル名用にドキュメントタイトルを設定
     const date = new Date(execution.value.timestamp)

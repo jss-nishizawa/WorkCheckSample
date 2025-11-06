@@ -1,7 +1,7 @@
 import { openDB } from 'idb'
 
 const DB_NAME = 'WorkCheckDB'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 // IndexedDB初期化
 export async function initDB() {
@@ -28,6 +28,14 @@ export async function initDB() {
         if (!db.objectStoreNames.contains('meta')) {
           console.log('metaストア作成中...')
           db.createObjectStore('meta', { keyPath: 'key' })
+        }
+
+        // templates: チェックリストテンプレート
+        if (!db.objectStoreNames.contains('templates')) {
+          console.log('templatesストア作成中...')
+          const templateStore = db.createObjectStore('templates', { keyPath: 'id' })
+          templateStore.createIndex('templateId', 'templateId', { unique: true })
+          templateStore.createIndex('isDefault', 'isDefault', { unique: false })
         }
         console.log('IndexedDBスキーマアップグレード完了')
       }
@@ -152,11 +160,11 @@ export async function getMeta(key) {
   }
 }
 
-// 当日の実行ID採番カウンターを取得・更新
-export async function getNextRunNumber(date) {
+// 当日の実行ID採番カウンターを取得・更新（テンプレートIDごと、日付ごと）
+export async function getNextRunNumber(templateId, date) {
   try {
-    console.log('getNextRunNumber呼び出し:', date)
-    const key = `runCounter_${date}`
+    console.log('getNextRunNumber呼び出し:', templateId, date)
+    const key = `runCounter_${templateId}_${date}`
     const current = await getMeta(key)
     const next = (current || 0) + 1
     console.log('次の連番:', next)
@@ -165,6 +173,161 @@ export async function getNextRunNumber(date) {
   } catch (error) {
     console.error('getNextRunNumberエラー:', error)
     throw new Error(`連番の取得に失敗しました: ${error.message}`)
+  }
+}
+
+// ===== テンプレート管理機能 =====
+
+// テンプレートを保存
+export async function saveTemplate(template) {
+  try {
+    console.log('saveTemplate呼び出し:', template)
+    
+    // Vueのリアクティブオブジェクトをプレーンオブジェクトに変換
+    const safeTemplate = JSON.parse(JSON.stringify(template))
+    
+    if (!safeTemplate.id) {
+      safeTemplate.id = crypto.randomUUID()
+    }
+    if (!safeTemplate.createdAt) {
+      safeTemplate.createdAt = new Date().toISOString()
+    }
+    safeTemplate.updatedAt = new Date().toISOString()
+    
+    console.log('シリアライズ後のテンプレート:', safeTemplate)
+    
+    const db = await initDB()
+    const tx = db.transaction('templates', 'readwrite')
+    await tx.store.put(safeTemplate)
+    await tx.done
+    console.log('saveTemplate完了:', safeTemplate.id)
+    return safeTemplate.id
+  } catch (error) {
+    console.error('saveTemplateエラー:', error)
+    throw new Error(`テンプレートの保存に失敗しました: ${error.message}`)
+  }
+}
+
+// 全テンプレートを取得
+export async function getTemplates() {
+  try {
+    const db = await initDB()
+    const tx = db.transaction('templates', 'readonly')
+    const templates = await tx.store.getAll()
+    return templates || []
+  } catch (error) {
+    console.error('getTemplatesエラー:', error)
+    throw new Error(`テンプレートの取得に失敗しました: ${error.message}`)
+  }
+}
+
+// 特定のテンプレートを取得
+export async function getTemplate(id) {
+  try {
+    const db = await initDB()
+    return await db.get('templates', id)
+  } catch (error) {
+    console.error('getTemplateエラー:', error)
+    throw new Error(`テンプレートの取得に失敗しました: ${error.message}`)
+  }
+}
+
+// テンプレートIDで取得
+export async function getTemplateByTemplateId(templateId) {
+  try {
+    const db = await initDB()
+    const tx = db.transaction('templates', 'readonly')
+    const index = tx.store.index('templateId')
+    return await index.get(templateId)
+  } catch (error) {
+    console.error('getTemplateByTemplateIdエラー:', error)
+    throw new Error(`テンプレートの取得に失敗しました: ${error.message}`)
+  }
+}
+
+// テンプレートを削除
+export async function deleteTemplate(id) {
+  try {
+    const db = await initDB()
+    const tx = db.transaction('templates', 'readwrite')
+    await tx.store.delete(id)
+    await tx.done
+    console.log('deleteTemplate完了:', id)
+  } catch (error) {
+    console.error('deleteTemplateエラー:', error)
+    throw new Error(`テンプレートの削除に失敗しました: ${error.message}`)
+  }
+}
+
+// アクティブなテンプレートIDを取得
+export async function getActiveTemplateId() {
+  try {
+    const templateId = await getMeta('activeTemplateId')
+    return templateId
+  } catch (error) {
+    console.error('getActiveTemplateIdエラー:', error)
+    return null
+  }
+}
+
+// アクティブなテンプレートIDを設定
+export async function setActiveTemplateId(id) {
+  try {
+    await saveMeta('activeTemplateId', id)
+    console.log('setActiveTemplateId完了:', id)
+  } catch (error) {
+    console.error('setActiveTemplateIdエラー:', error)
+    throw new Error(`アクティブテンプレートの設定に失敗しました: ${error.message}`)
+  }
+}
+
+// ===== 会社設定管理機能 =====
+
+// 会社設定を保存
+export async function saveCompanyConfig(config) {
+  try {
+    console.log('saveCompanyConfig呼び出し:', config)
+    await saveMeta('companyConfig', config)
+    console.log('saveCompanyConfig完了')
+  } catch (error) {
+    console.error('saveCompanyConfigエラー:', error)
+    throw new Error(`会社設定の保存に失敗しました: ${error.message}`)
+  }
+}
+
+// 会社設定を取得
+export async function getCompanyConfig() {
+  try {
+    const config = await getMeta('companyConfig')
+    return config
+  } catch (error) {
+    console.error('getCompanyConfigエラー:', error)
+    return null
+  }
+}
+
+// 会社ロゴを保存
+export async function saveCompanyLogo(dataUrl) {
+  try {
+    console.log('saveCompanyLogo呼び出し')
+    if (!dataUrl) {
+      throw new Error('ロゴデータが空です')
+    }
+    await saveBlob('company_logo', dataUrl)
+    console.log('saveCompanyLogo完了')
+  } catch (error) {
+    console.error('saveCompanyLogoエラー:', error)
+    throw new Error(`会社ロゴの保存に失敗しました: ${error.message}`)
+  }
+}
+
+// 会社ロゴを取得
+export async function getCompanyLogo() {
+  try {
+    return await getBlob('company_logo')
+  } catch (error) {
+    console.error('getCompanyLogoエラー:', error)
+    return null
   }
 }
 
